@@ -2,9 +2,18 @@
 import * as vscode from "vscode";
 import { window, workspace, Uri, WorkspaceFolder, TextDocument } from "vscode";
 import * as path from "path";
+import { worker } from "cluster";
+import * as fs from "fs";
+import * as mkdirp from "mkdirp";
+
 import * as mm from "micromatch";
 import { isMatch } from "micromatch";
-import { worker } from "cluster";
+import { denodeify } from "q";
+
+const fsStat = denodeify(fs.stat);
+const mkdir = denodeify(mkdirp);
+const writeFile = denodeify(fs.writeFile);
+const fileExists = denodeify(fs.exists);
 
 export function activate(context: vscode.ExtensionContext) {
   // TODO memoize all the matchers and load them here.?
@@ -26,9 +35,12 @@ export function activate(context: vscode.ExtensionContext) {
         editor.document
       );
 
+      createFileIfNecessary(alternateUri);
       return workspace
-        .openTextDocument(currentUri)
-        .then(doc => window.showTextDocument(doc, editor.viewColumn + 1));
+        .openTextDocument(alternateUri)
+        .then(doc =>
+          window.showTextDocument(doc, window.activeTextEditor.viewColumn + 1)
+        );
     }
   );
 
@@ -43,6 +55,17 @@ function configurationForWorkspace(workspace: WorkspaceFolder): Uri {
   );
   const configuration = require(configurationPath);
   return configuration;
+}
+
+async function createFileIfNecessary(uri: Uri) {
+  const fileName = uri.fsPath;
+  const dirname: string = path.dirname(fileName);
+  const doesFileExist: boolean = await fileExists(fileName);
+
+  if (!doesFileExist) {
+    await mkdir(dirname);
+    await writeFile(fileName);
+  }
 }
 
 /**
@@ -69,7 +92,7 @@ function alternateUriForDocument(
           workspace.uri.fsPath,
           alternateRelativePath
         );
-        return Uri.parse(alternatePath);
+        return uri.with({ path: alternatePath });
       }
     }
   }
