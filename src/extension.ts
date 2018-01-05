@@ -20,7 +20,7 @@ export function activate(context: vscode.ExtensionContext) {
   // Then we'll have to deal with caching
   const disposable = vscode.commands.registerCommand(
     "projectionist.jumpToAlternateFile",
-    () => {
+    async () => {
       const editor = window.activeTextEditor;
       if (!editor) {
         return;
@@ -35,7 +35,7 @@ export function activate(context: vscode.ExtensionContext) {
         editor.document
       );
 
-      createFileIfNecessary(alternateUri);
+      await createFileIfNecessary(alternateUri);
       return workspace
         .openTextDocument(alternateUri)
         .then(doc =>
@@ -64,7 +64,7 @@ async function createFileIfNecessary(uri: Uri) {
 
   if (!doesFileExist) {
     await mkdir(dirname);
-    await writeFile(fileName);
+    await writeFile(fileName, "");
   }
 }
 
