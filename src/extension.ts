@@ -1,19 +1,27 @@
 "use strict";
 import * as vscode from "vscode";
-import { window, workspace, Uri, WorkspaceFolder, TextDocument } from "vscode";
+import {
+  window,
+  workspace,
+  Uri,
+  WorkspaceFolder,
+  TextDocument,
+  ViewColumn
+} from "vscode";
 import * as path from "path";
 import { worker } from "cluster";
 import * as fs from "fs";
-import * as mkdirp from "mkdirp";
 
 import * as mm from "micromatch";
 import { isMatch } from "micromatch";
-import { denodeify } from "q";
 
-const fsStat = denodeify(fs.stat);
-const mkdir = denodeify(mkdirp);
-const writeFile = denodeify(fs.writeFile);
-const fileExists = denodeify(fs.exists);
+function fileExists(path: string): Promise<boolean> {
+  return new Promise((resolve, reject) => {
+    fs.exists(path, exists => {
+      resolve(exists);
+    });
+  });
+}
 
 export function activate(context: vscode.ExtensionContext) {
   // TODO memoize all the matchers and load them here.?
@@ -35,12 +43,14 @@ export function activate(context: vscode.ExtensionContext) {
         editor.document
       );
 
-      await createFileIfNecessary(alternateUri);
+      const exists = await fileExists(alternateUri.fsPath);
+      const openUri = exists
+        ? alternateUri
+        : alternateUri.with({ scheme: "untitled" });
+
       return workspace
-        .openTextDocument(alternateUri)
-        .then(doc =>
-          window.showTextDocument(doc, window.activeTextEditor.viewColumn + 1)
-        );
+        .openTextDocument(openUri)
+        .then(doc => window.showTextDocument(doc));
     }
   );
 
@@ -55,17 +65,6 @@ function configurationForWorkspace(workspace: WorkspaceFolder): Uri {
   );
   const configuration = require(configurationPath);
   return configuration;
-}
-
-async function createFileIfNecessary(uri: Uri) {
-  const fileName = uri.fsPath;
-  const dirname: string = path.dirname(fileName);
-  const doesFileExist: boolean = await fileExists(fileName);
-
-  if (!doesFileExist) {
-    await mkdir(dirname);
-    await writeFile(fileName, "");
-  }
 }
 
 /**
