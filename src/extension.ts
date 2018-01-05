@@ -1,29 +1,80 @@
-'use strict';
-// The module 'vscode' contains the VS Code extensibility API
-// Import the module and reference it with the alias vscode in your code below
-import * as vscode from 'vscode';
+"use strict";
+import * as vscode from "vscode";
+import { window, workspace, Uri, WorkspaceFolder, TextDocument } from "vscode";
+import * as path from "path";
+import * as mm from "micromatch";
+import { isMatch } from "micromatch";
+import { worker } from "cluster";
 
-// this method is called when your extension is activated
-// your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
+  // TODO memoize all the matchers and load them here.?
+  // Then we'll have to deal with caching
+  const disposable = vscode.commands.registerCommand(
+    "projectionist.jumpToAlternateFile",
+    () => {
+      const editor = window.activeTextEditor;
+      if (!editor) {
+        return;
+      }
 
-    // Use the console to output diagnostic information (console.log) and errors (console.error)
-    // This line of code will only be executed once when your extension is activated
-    console.log('Congratulations, your extension "projectionist" is now active!');
+      const currentUri = editor.document.uri;
+      const currentWorkspace = workspace.getWorkspaceFolder(currentUri);
+      const configuration = configurationForWorkspace(currentWorkspace);
+      const alternateUri = alternateUriForDocument(
+        currentWorkspace,
+        configuration,
+        editor.document
+      );
 
-    // The command has been defined in the package.json file
-    // Now provide the implementation of the command with  registerCommand
-    // The commandId parameter must match the command field in package.json
-    let disposable = vscode.commands.registerCommand('extension.sayHello', () => {
-        // The code you place here will be executed every time your command is executed
+      return workspace
+        .openTextDocument(currentUri)
+        .then(doc => window.showTextDocument(doc, editor.viewColumn + 1));
+    }
+  );
 
-        // Display a message box to the user
-        vscode.window.showInformationMessage('Hello World!');
-    });
+  context.subscriptions.push(disposable);
+}
 
-    context.subscriptions.push(disposable);
+function configurationForWorkspace(workspace: WorkspaceFolder): Uri {
+  const workspaceUri = workspace.uri;
+  const configurationPath = path.resolve(
+    workspaceUri.fsPath,
+    ".projectionist.json"
+  );
+  const configuration = require(configurationPath);
+  return configuration;
+}
+
+/**
+ * Returns a `Uri` for the alternate specified in the projectionist configuration.
+ * If no alternate glob is specified in the configuration, returns undefined.
+ * @param workspace the workspace the document belongs to
+ * @param configuration the projectionist configuration (loaded from .projectionist.json)
+ * @param document the document currently being edited
+ */
+function alternateUriForDocument(
+  workspace: WorkspaceFolder,
+  configuration: Object,
+  document: TextDocument
+): Uri | undefined {
+  const uri = document.uri;
+  const fsPath = uri.fsPath.replace(workspace.uri.fsPath, "").substring(1); // remove project path and leading slash
+  for (const glob in configuration) {
+    if (configuration.hasOwnProperty(glob)) {
+      const alternateGlob = configuration[glob]["alternate"];
+      if (alternateGlob && isMatch(fsPath, glob)) {
+        const match = mm.capture(glob, fsPath)[0];
+        const alternateRelativePath = alternateGlob.replace("*", match);
+        const alternatePath = path.resolve(
+          workspace.uri.fsPath,
+          alternateRelativePath
+        );
+        return Uri.parse(alternatePath);
+      }
+    }
+  }
+  return undefined;
 }
 
 // this method is called when your extension is deactivated
-export function deactivate() {
-}
+export function deactivate() {}
