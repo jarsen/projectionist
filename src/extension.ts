@@ -24,40 +24,40 @@ function fileExists(path: string): Promise<boolean> {
 }
 
 export function activate(context: vscode.ExtensionContext) {
-  // TODO memoize all the matchers and load them here.?
-  // Then we'll have to deal with caching
-  const disposable = vscode.commands.registerCommand(
-    "projectionist.jumpToAlternateFile",
-    async () => {
-      const editor = window.activeTextEditor;
-      if (!editor) {
-        return;
-      }
-
-      const currentUri = editor.document.uri;
-      const currentWorkspace = workspace.getWorkspaceFolder(currentUri);
-      const configuration = configurationForWorkspace(currentWorkspace);
-      const alternateUri = alternateUriForDocument(
-        currentWorkspace,
-        configuration,
-        editor.document
-      );
-
-      const exists = await fileExists(alternateUri.fsPath);
-      const openUri = exists
-        ? alternateUri
-        : alternateUri.with({ scheme: "untitled" });
-
-      return workspace
-        .openTextDocument(openUri)
-        .then(doc => window.showTextDocument(doc));
-    }
+  console.log("started projectionist");
+  const openAlternateFileCmd = vscode.commands.registerCommand(
+    "projectionist.openAlternateFile",
+    () => openAlternateFile({ split: false })
   );
 
-  context.subscriptions.push(disposable);
+  const openAlternateFileSplitCmd = vscode.commands.registerCommand(
+    "projectionist.openAlternateFileSplit",
+    () => openAlternateFile({ split: true })
+  );
+
+  context.subscriptions.push(openAlternateFileCmd, openAlternateFileSplitCmd);
 }
 
-function configurationForWorkspace(workspace: WorkspaceFolder): Uri {
+async function openAlternateFile(options?: {}): Promise<vscode.TextEditor> {
+  const editor = window.activeTextEditor;
+  if (!editor) {
+    return;
+  }
+
+  const openUri = await alternateUriForCurrentDocument();
+  if (openUri == undefined) {
+    return;
+  }
+
+  const viewColumn =
+    options["split"] === true ? editor.viewColumn + 1 : editor.viewColumn;
+
+  return workspace
+    .openTextDocument(openUri)
+    .then(doc => window.showTextDocument(doc, viewColumn));
+}
+
+function getConfiguration(workspace: WorkspaceFolder): Uri {
   const workspaceUri = workspace.uri;
   const configurationPath = path.resolve(
     workspaceUri.fsPath,
@@ -68,19 +68,21 @@ function configurationForWorkspace(workspace: WorkspaceFolder): Uri {
 }
 
 /**
- * Returns a `Uri` for the alternate specified in the projectionist configuration.
+ * Returns a `Uri` for the alternate specified in the .projectionist.json configuration.
  * If no alternate glob is specified in the configuration, returns undefined.
- * @param workspace the workspace the document belongs to
- * @param configuration the projectionist configuration (loaded from .projectionist.json)
- * @param document the document currently being edited
  */
-function alternateUriForDocument(
-  workspace: WorkspaceFolder,
-  configuration: Object,
-  document: TextDocument
-): Uri | undefined {
+async function alternateUriForCurrentDocument(): Promise<Uri | undefined> {
+  const editor = window.activeTextEditor;
+  const currentUri = editor.document.uri;
+  const currentWorkspace = workspace.getWorkspaceFolder(currentUri);
+  const configuration = getConfiguration(currentWorkspace);
+  const document = editor.document;
   const uri = document.uri;
-  const fsPath = uri.fsPath.replace(workspace.uri.fsPath, "").substring(1); // remove project path and leading slash
+
+  const fsPath = uri.fsPath
+    .replace(currentWorkspace.uri.fsPath, "")
+    .substring(1); // remove project path and leading slash
+
   for (const glob in configuration) {
     if (configuration.hasOwnProperty(glob)) {
       const alternateGlob = configuration[glob]["alternate"];
@@ -88,10 +90,15 @@ function alternateUriForDocument(
         const match = mm.capture(glob, fsPath)[0];
         const alternateRelativePath = alternateGlob.replace("*", match);
         const alternatePath = path.resolve(
-          workspace.uri.fsPath,
+          currentWorkspace.uri.fsPath,
           alternateRelativePath
         );
-        return uri.with({ path: alternatePath });
+        const alternateUri = uri.with({ path: alternatePath });
+
+        const exists = await fileExists(alternateUri.fsPath);
+        return exists
+          ? alternateUri
+          : alternateUri.with({ scheme: "untitled" });
       }
     }
   }

@@ -8,13 +8,20 @@
     "vscode": "^1.19.0"
   },
   "categories": ["Other"],
-  "activationEvents": ["onCommand:projectionist.jumpToAlternateFile"],
+  "activationEvents": [
+    "onCommand:projectionist.openAlternateFile",
+    "onCommand:projectionist.openAlternateFileSplit"
+  ],
   "main": "./out/extension",
   "contributes": {
     "commands": [
       {
-        "command": "projectionist.jumpToAlternateFile",
-        "title": "Jump to Alternate File"
+        "command": "projectionist.openAlternateFile",
+        "title": "Open Alternate File"
+      },
+      {
+        "command": "projectionist.openAlternateFileSplit",
+        "title": "Open Alternate File in Split Editor"
       }
     ]
   },
