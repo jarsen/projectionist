@@ -24,7 +24,6 @@ function fileExists(path: string): Promise<boolean> {
 }
 
 export function activate(context: vscode.ExtensionContext) {
-  console.log("started projectionist");
   const openAlternateFileCmd = vscode.commands.registerCommand(
     "projectionist.openAlternateFile",
     () => openAlternateFile({ split: false })
