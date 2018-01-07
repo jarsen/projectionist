@@ -10,7 +10,8 @@
   "categories": ["Other"],
   "activationEvents": [
     "onCommand:projectionist.openAlternateFile",
-    "onCommand:projectionist.openAlternateFileSplit"
+    "onCommand:projectionist.openAlternateFileSplit",
+    "onCommand:projectionist.navigateTo"
   ],
   "main": "./out/extension",
   "contributes": {
@@ -22,6 +23,10 @@
       {
         "command": "projectionist.openAlternateFileSplit",
         "title": "Open Alternate File in Split Editor"
+      },
+      {
+        "command": "projectionist.navigateTo",
+        "title": "Projectionist: Navigate to..."
       }
     ]
   },

@@ -34,17 +34,29 @@ export function activate(context: vscode.ExtensionContext) {
     () => openAlternateFile({ split: true })
   );
 
+  const openOtherFileCmd = vscode.commands.registerCommand(
+    "projectionist.navigateTo",
+    async () => {
+      const input = await window.showInputBox();
+      if (input === "") {
+        return;
+      }
+      const [type, name] = input.split(" ");
+      return navigateTo(type, name, { split: false });
+    }
+  );
+
   context.subscriptions.push(openAlternateFileCmd, openAlternateFileSplitCmd);
 }
 
-async function openAlternateFile(options?: {}): Promise<vscode.TextEditor> {
+async function navigateTo(type: string, name: string, options?: Object) {
   const editor = window.activeTextEditor;
   if (!editor) {
     return;
   }
 
-  const openUri = await alternateUriForCurrentDocument();
-  if (openUri == undefined) {
+  const uri = await getUri(type, name);
+  if (uri == undefined) {
     return;
   }
 
@@ -52,7 +64,30 @@ async function openAlternateFile(options?: {}): Promise<vscode.TextEditor> {
     options["split"] === true ? editor.viewColumn + 1 : editor.viewColumn;
 
   return workspace
-    .openTextDocument(openUri)
+    .openTextDocument(uri)
+    .then(doc => window.showTextDocument(doc, viewColumn));
+}
+
+async function openAlternateFile(options?: {}) {
+  const editor = window.activeTextEditor;
+  if (!editor) {
+    return;
+  }
+
+  const uri = await getAlternateUriForCurrentDocument();
+  openUri(uri, options);
+}
+
+function openUri(uri: Uri, options: Object) {
+  if (!uri) {
+    return;
+  }
+  const editor = window.activeTextEditor;
+  const viewColumn =
+    options["split"] === true ? editor.viewColumn + 1 : editor.viewColumn;
+
+  workspace
+    .openTextDocument(uri)
     .then(doc => window.showTextDocument(doc, viewColumn));
 }
 
@@ -66,38 +101,80 @@ function getConfiguration(workspace: WorkspaceFolder): Uri {
   return configuration;
 }
 
+async function getUri(type: string, name?: string): Promise<Uri | undefined> {
+  const editor = window.activeTextEditor;
+  const currentUri = editor.document.uri;
+  const currentWorkspace = workspace.getWorkspaceFolder(currentUri);
+  const workspacePath = currentWorkspace.uri.fsPath;
+  const configuration = getConfiguration(currentWorkspace);
+  const document = editor.document;
+
+  if (name) {
+    const typeCaseInsensitive = type.toLowerCase();
+    for (const glob in configuration) {
+      if (configuration.hasOwnProperty(glob)) {
+        if (configuration[glob]["type"].toLowerCase() === typeCaseInsensitive) {
+          const pathTemplate = glob;
+          const newRelativePath = pathTemplate.replace("*", name);
+          const newAbsolutePath = path.resolve(workspacePath, newRelativePath);
+          const newUri = currentUri.with({ path: newAbsolutePath });
+
+          const exists = await fileExists(newUri.fsPath);
+          return exists ? newUri : newUri.with({ scheme: "untitled" });
+        }
+      }
+    }
+  } else {
+    for (const glob in configuration) {
+      if (configuration.hasOwnProperty(glob)) {
+        const pathTemplate = configuration[glob][type];
+        const fsPath = currentUri.fsPath
+          .replace(currentWorkspace.uri.fsPath, "")
+          .substring(1); // remove project path and leading slash
+        if (pathTemplate && isMatch(fsPath, glob)) {
+          const match = mm.capture(glob, fsPath)[0];
+          const newRelativePath = pathTemplate.replace("{}", match);
+          const newAbsolutePath = path.resolve(workspacePath, newRelativePath);
+          const newUri = currentUri.with({ path: newAbsolutePath });
+
+          const exists = await fileExists(newUri.fsPath);
+          return exists ? newUri : newUri.with({ scheme: "untitled" });
+        }
+      }
+    }
+  }
+  return undefined;
+}
+
 /**
  * Returns a `Uri` for the alternate specified in the .projectionist.json configuration.
  * If no alternate glob is specified in the configuration, returns undefined.
  */
-async function alternateUriForCurrentDocument(): Promise<Uri | undefined> {
+async function getAlternateUriForCurrentDocument(): Promise<Uri | undefined> {
   const editor = window.activeTextEditor;
   const currentUri = editor.document.uri;
   const currentWorkspace = workspace.getWorkspaceFolder(currentUri);
   const configuration = getConfiguration(currentWorkspace);
   const document = editor.document;
-  const uri = document.uri;
 
-  const fsPath = uri.fsPath
+  const fsPath = currentUri.fsPath
     .replace(currentWorkspace.uri.fsPath, "")
     .substring(1); // remove project path and leading slash
 
   for (const glob in configuration) {
     if (configuration.hasOwnProperty(glob)) {
-      const alternateGlob = configuration[glob]["alternate"];
-      if (alternateGlob && isMatch(fsPath, glob)) {
+      const pathTemplate = configuration[glob]["alternate"];
+      if (pathTemplate && isMatch(fsPath, glob)) {
         const match = mm.capture(glob, fsPath)[0];
-        const alternateRelativePath = alternateGlob.replace("*", match);
-        const alternatePath = path.resolve(
+        const newRelativePath = pathTemplate.replace("{}", match);
+        const newAbsolutePath = path.resolve(
           currentWorkspace.uri.fsPath,
-          alternateRelativePath
+          newRelativePath
         );
-        const alternateUri = uri.with({ path: alternatePath });
+        const newUri = currentUri.with({ path: newAbsolutePath });
 
-        const exists = await fileExists(alternateUri.fsPath);
-        return exists
-          ? alternateUri
-          : alternateUri.with({ scheme: "untitled" });
+        const exists = await fileExists(newUri.fsPath);
+        return exists ? newUri : newUri.with({ scheme: "untitled" });
       }
     }
   }
