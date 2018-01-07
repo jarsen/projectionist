@@ -9,24 +9,24 @@
   },
   "categories": ["Other"],
   "activationEvents": [
-    "onCommand:projectionist.openAlternateFile",
-    "onCommand:projectionist.openAlternateFileSplit",
-    "onCommand:projectionist.navigateTo"
+    "onCommand:projectionist.projectAlternateFile",
+    "onCommand:projectionist.projectAlternateFileSplit",
+    "onCommand:projectionist.projectFile"
   ],
   "main": "./out/extension",
   "contributes": {
     "commands": [
       {
-        "command": "projectionist.openAlternateFile",
-        "title": "Open Alternate File"
+        "command": "projectionist.projectAlternateFile",
+        "title": "Projectionist: Project Alternate File"
       },
       {
-        "command": "projectionist.openAlternateFileSplit",
-        "title": "Open Alternate File in Split Editor"
+        "command": "projectionist.projectAlternateFileSplit",
+        "title": "Projectionist: Project Alternate File in Split Editor"
       },
       {
-        "command": "projectionist.navigateTo",
-        "title": "Projectionist: Navigate to..."
+        "command": "projectionist.projectFile",
+        "title": "Projectionist: Project File..."
       }
     ]
   },

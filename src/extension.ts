@@ -24,18 +24,18 @@ function fileExists(path: string): Promise<boolean> {
 }
 
 export function activate(context: vscode.ExtensionContext) {
-  const openAlternateFileCmd = vscode.commands.registerCommand(
-    "projectionist.openAlternateFile",
+  const projectAlternateFileCmd = vscode.commands.registerCommand(
+    "projectionist.projectAlternateFile",
     () => openAlternateFile({ split: false })
   );
 
-  const openAlternateFileSplitCmd = vscode.commands.registerCommand(
-    "projectionist.openAlternateFileSplit",
+  const projectAlternateFileSplitCmd = vscode.commands.registerCommand(
+    "projectionist.projectAlternateFileSplit",
     () => openAlternateFile({ split: true })
   );
 
-  const openOtherFileCmd = vscode.commands.registerCommand(
-    "projectionist.navigateTo",
+  const projectFileCmd = vscode.commands.registerCommand(
+    "projectionist.projectFile",
     async () => {
       const input = await window.showInputBox();
       if (input === "") {
@@ -52,7 +52,10 @@ export function activate(context: vscode.ExtensionContext) {
     }
   );
 
-  context.subscriptions.push(openAlternateFileCmd, openAlternateFileSplitCmd);
+  context.subscriptions.push(
+    projectAlternateFileCmd,
+    projectAlternateFileSplitCmd
+  );
 }
 
 /**
