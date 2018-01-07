@@ -114,13 +114,7 @@ async function getUri(type: string, name?: string): Promise<Uri | undefined> {
     for (const glob in configuration) {
       if (configuration.hasOwnProperty(glob)) {
         if (configuration[glob]["type"].toLowerCase() === typeCaseInsensitive) {
-          const pathTemplate = glob;
-          const newRelativePath = pathTemplate.replace("*", name);
-          const newAbsolutePath = path.resolve(workspacePath, newRelativePath);
-          const newUri = currentUri.with({ path: newAbsolutePath });
-
-          const exists = await fileExists(newUri.fsPath);
-          return exists ? newUri : newUri.with({ scheme: "untitled" });
+          return await getNewUri(currentWorkspace, name, glob, "*");
         }
       }
     }
@@ -133,17 +127,26 @@ async function getUri(type: string, name?: string): Promise<Uri | undefined> {
           .substring(1); // remove project path and leading slash
         if (pathTemplate && isMatch(fsPath, glob)) {
           const match = mm.capture(glob, fsPath)[0];
-          const newRelativePath = pathTemplate.replace("{}", match);
-          const newAbsolutePath = path.resolve(workspacePath, newRelativePath);
-          const newUri = currentUri.with({ path: newAbsolutePath });
-
-          const exists = await fileExists(newUri.fsPath);
-          return exists ? newUri : newUri.with({ scheme: "untitled" });
+          return await getNewUri(currentWorkspace, match, pathTemplate, "{}");
         }
       }
     }
   }
   return undefined;
+}
+
+async function getNewUri(
+  workspace: WorkspaceFolder,
+  replaceWith: string,
+  template: string,
+  replacing: string
+) {
+  const newRelativePath = template.replace(replacing, replaceWith);
+  const newAbsolutePath = path.resolve(workspace.uri.fsPath, newRelativePath);
+  const newUri = workspace.uri.with({ path: newAbsolutePath });
+
+  const exists = await fileExists(newUri.fsPath);
+  return exists ? newUri : newUri.with({ scheme: "untitled" });
 }
 
 /**
@@ -166,15 +169,7 @@ async function getAlternateUriForCurrentDocument(): Promise<Uri | undefined> {
       const pathTemplate = configuration[glob]["alternate"];
       if (pathTemplate && isMatch(fsPath, glob)) {
         const match = mm.capture(glob, fsPath)[0];
-        const newRelativePath = pathTemplate.replace("{}", match);
-        const newAbsolutePath = path.resolve(
-          currentWorkspace.uri.fsPath,
-          newRelativePath
-        );
-        const newUri = currentUri.with({ path: newAbsolutePath });
-
-        const exists = await fileExists(newUri.fsPath);
-        return exists ? newUri : newUri.with({ scheme: "untitled" });
+        return await getNewUri(currentWorkspace, match, pathTemplate, "{}");
       }
     }
   }
